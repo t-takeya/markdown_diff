@@ -2,7 +2,7 @@
   "name": "markdown-format-diff",
   "displayName": "Markdown Format Diff",
   "description": "Preview Git changes in Markdown source and rendered preview diff views.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "machshev1969",
   "license": "MIT",
   "engines": {

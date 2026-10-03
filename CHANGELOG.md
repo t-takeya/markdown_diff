@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Updated the Japanese README link in README.md.
+
 ## 0.3.0
 
 - Changed source and preview diff commands to compare Git HEAD content against the current working tree instead of comparing local formatted output.
