@@ -2,30 +2,31 @@
 
 Japanese README: [README.ja.md](./README.ja.md)
 
-Markdown Format Diff is a VS Code extension that previews how a Markdown file will change after formatting. It can show a source diff in the normal VS Code diff editor, or a rendered preview diff that compares the current Markdown preview with the formatted Markdown preview before you save or apply edits.
+Markdown Format Diff is a VS Code extension that previews Markdown changes recorded by Git. It can show a source diff between the Git `HEAD` version and the current working tree, or a rendered preview diff that compares both Markdown versions side by side.
 
 ## Features
 
-- Preview formatted Markdown without modifying the file.
-- Compare current and formatted Markdown as source text or rendered preview blocks.
+- Compare Git `HEAD` content with the current working tree for Markdown files.
+- Preview Markdown changes without modifying files.
+- Compare Git changes as source text or rendered preview blocks.
 - Run from the Command Palette, editor context menu, or Git Source Control resource menu.
-- Uses the Markdown formatter already available in VS Code, including your formatter extensions and editor formatting settings.
+- Supports added and deleted Markdown files by comparing against an empty side when no `HEAD` content or working-tree file exists.
 - Optionally require files to be inside a Git repository.
 
 ## Commands
 
 | Command | Description |
 | --- | --- |
-| `Markdown Format Diff: Show Formatted Diff` | Preview source formatting changes for the active Markdown file. |
-| `Markdown Format Diff: Show Formatted Diff From Source Control` | Preview source formatting changes for a Markdown file selected from Source Control. |
-| `Markdown Format Diff: Show Formatted Preview Diff` | Preview rendered Markdown changes side by side, with changed preview blocks highlighted. |
-| `Markdown Format Diff: Show Formatted Preview Diff From Source Control` | Preview rendered Markdown changes for a Markdown file selected from Source Control. |
+| `Markdown Format Diff: Show Git Source Diff` | Show a source diff between Git `HEAD` and the working tree for the active Markdown file. |
+| `Markdown Format Diff: Show Git Source Diff From Source Control` | Show a source diff for a Markdown file selected from Source Control. |
+| `Markdown Format Diff: Show Git Preview Diff` | Show rendered Markdown Git changes side by side, with changed preview blocks highlighted. |
+| `Markdown Format Diff: Show Git Preview Diff From Source Control` | Show rendered Markdown Git changes for a Markdown file selected from Source Control. |
 
 ## Settings
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `markdownFormatDiff.openBeside` | `true` | Open the source diff editor beside the current editor. |
+| `markdownFormatDiff.openBeside` | `true` | Open the Git source diff beside the current editor. |
 | `markdownFormatDiff.requireGitRepository` | `true` | Require the Markdown file to be inside a Git repository. |
 
 ## Packaging
@@ -48,7 +49,7 @@ vsce publish
 ## Requirements
 
 - VS Code 1.90.0 or newer.
-- Git must be available on `PATH` when `markdownFormatDiff.requireGitRepository` is enabled.
+- Git must be available on `PATH`.
 
 ## License
 

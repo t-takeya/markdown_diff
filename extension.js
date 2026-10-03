@@ -1,10 +1,11 @@
 'use strict';
 
+const path = require('path');
 const vscode = require('vscode');
 const MarkdownIt = require('markdown-it');
 
 const SCHEME = 'markdown-format-diff';
-const formattedDocuments = new Map();
+const virtualDocuments = new Map();
 const markdownRenderer = new MarkdownIt({
   html: false,
   linkify: true,
@@ -19,102 +20,98 @@ function activate(context) {
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
       onDidChange: changeEmitter.event,
       provideTextDocumentContent(uri) {
-        return formattedDocuments.get(uri.toString()) || '';
+        return virtualDocuments.get(uri.toString()) || '';
       }
     }),
-    vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiff', showFormattedDiff),
-    vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiffFromSourceControl', showFormattedDiffFromSourceControl),
-    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiff', showFormattedPreviewDiff),
-    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiffFromSourceControl', showFormattedPreviewDiffFromSourceControl)
+    vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiff', showGitSourceDiff),
+    vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiffFromSourceControl', showGitSourceDiffFromSourceControl),
+    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiff', showGitPreviewDiff),
+    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiffFromSourceControl', showGitPreviewDiffFromSourceControl)
   );
 }
 
 function deactivate() {
-  formattedDocuments.clear();
+  virtualDocuments.clear();
 }
 
-async function showFormattedDiff(resource) {
+async function showGitSourceDiff(resource) {
   const uri = getResourceUri(resource) || getActiveMarkdownUri();
   if (!uri) {
-    vscode.window.showWarningMessage('Open a Markdown file to preview formatting changes.');
+    vscode.window.showWarningMessage('Open a Markdown file to preview Git changes.');
     return;
   }
 
-  await showDiffForUri(uri);
+  await showGitSourceDiffForUri(uri);
 }
 
-async function showFormattedDiffFromSourceControl(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
-  if (!uri) {
-    vscode.window.showWarningMessage('Select a Markdown file in Source Control or open one in the editor.');
-    return;
-  }
-
-  await showDiffForUri(uri);
-}
-
-async function showFormattedPreviewDiff(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
-  if (!uri) {
-    vscode.window.showWarningMessage('Open or select a Markdown file to preview rendered formatting changes.');
-    return;
-  }
-
-  await showPreviewDiffForUri(uri);
-}
-
-async function showFormattedPreviewDiffFromSourceControl(resource) {
+async function showGitSourceDiffFromSourceControl(resource) {
   const uri = getResourceUri(resource) || getActiveMarkdownUri();
   if (!uri) {
     vscode.window.showWarningMessage('Select a Markdown file in Source Control or open one in the editor.');
     return;
   }
 
-  await showPreviewDiffForUri(uri);
+  await showGitSourceDiffForUri(uri);
 }
 
-async function showDiffForUri(uri) {
-  if (!(await validateMarkdownTarget(uri))) {
+async function showGitPreviewDiff(resource) {
+  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  if (!uri) {
+    vscode.window.showWarningMessage('Open or select a Markdown file to preview rendered Git changes.');
     return;
   }
 
-  const document = await vscode.workspace.openTextDocument(uri);
-  const formattedText = await formatDocumentToText(document);
+  await showGitPreviewDiffForUri(uri);
+}
 
-  if (formattedText === document.getText()) {
-    vscode.window.showInformationMessage('Markdown formatting would not change this file.');
+async function showGitPreviewDiffFromSourceControl(resource) {
+  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  if (!uri) {
+    vscode.window.showWarningMessage('Select a Markdown file in Source Control or open one in the editor.');
     return;
   }
 
-  const previewUri = createPreviewUri(uri);
-  formattedDocuments.set(previewUri.toString(), formattedText);
-  changeEmitter.fire(previewUri);
+  await showGitPreviewDiffForUri(uri);
+}
+
+async function showGitSourceDiffForUri(uri) {
+  const change = await getGitMarkdownChange(uri);
+  if (!change) {
+    return;
+  }
+
+  if (change.baseText === change.workingText) {
+    vscode.window.showInformationMessage('Git has no Markdown changes for this file.');
+    return;
+  }
+
+  const baseUri = createVirtualUri(uri, 'git-base');
+  const workingUri = createVirtualUri(uri, 'git-working');
+  setVirtualDocument(baseUri, change.baseText);
+  setVirtualDocument(workingUri, change.workingText);
 
   const config = vscode.workspace.getConfiguration('markdownFormatDiff');
-  const title = `${basename(uri.fsPath)}: Current vs Formatted`;
+  const title = `${basename(uri.fsPath)}: Git Base vs Working Tree`;
   const options = {
     preview: false,
     viewColumn: config.get('openBeside', true) ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active
   };
 
-  await vscode.commands.executeCommand('vscode.diff', uri, previewUri, title, options);
+  await vscode.commands.executeCommand('vscode.diff', baseUri, workingUri, title, options);
 }
 
-async function showPreviewDiffForUri(uri) {
-  if (!(await validateMarkdownTarget(uri))) {
+async function showGitPreviewDiffForUri(uri) {
+  const change = await getGitMarkdownChange(uri);
+  if (!change) {
     return;
   }
 
-  const document = await vscode.workspace.openTextDocument(uri);
-  const currentText = document.getText();
-  const formattedText = await formatDocumentToText(document);
-
-  if (formattedText === currentText) {
-    vscode.window.showInformationMessage('Markdown formatting would not change this file.');
+  if (change.baseText === change.workingText) {
+    vscode.window.showInformationMessage('Git has no Markdown changes for this file.');
     return;
   }
 
-  const title = `${basename(uri.fsPath)} Preview Diff`;
+  const title = `${basename(uri.fsPath)} Git Preview Diff`;
   const panel = vscode.window.createWebviewPanel(
     'markdownFormatDiff.previewDiff',
     title,
@@ -125,60 +122,80 @@ async function showPreviewDiffForUri(uri) {
     }
   );
 
-  panel.webview.html = buildPreviewDiffHtml(title, currentText, formattedText);
+  panel.webview.html = buildPreviewDiffHtml(title, change.baseText, change.workingText);
 }
 
-async function validateMarkdownTarget(uri) {
+async function getGitMarkdownChange(uri) {
   if (!isMarkdownUri(uri)) {
     vscode.window.showWarningMessage('Markdown Format Diff only supports Markdown files.');
-    return false;
+    return undefined;
   }
 
-  const config = vscode.workspace.getConfiguration('markdownFormatDiff');
-  if (config.get('requireGitRepository', true) && !(await isInsideGitRepository(uri))) {
-    vscode.window.showWarningMessage('This file is not inside a Git repository. Disable markdownFormatDiff.requireGitRepository to preview it anyway.');
-    return false;
+  const gitInfo = await getGitInfo(uri);
+  if (!gitInfo) {
+    vscode.window.showWarningMessage('This file is not inside a Git repository.');
+    return undefined;
   }
 
-  return true;
+  const baseText = await readGitHeadText(gitInfo.root, gitInfo.relativePath);
+  const workingText = await readWorkingTreeText(uri);
+
+  return {
+    baseText,
+    workingText,
+    relativePath: gitInfo.relativePath
+  };
 }
 
-async function formatDocumentToText(document) {
-  const options = getFormattingOptions();
-  const edits = await vscode.commands.executeCommand('vscode.executeFormatDocumentProvider', document.uri, options);
+async function getGitInfo(uri) {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+  const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : dirname(uri.fsPath);
 
-  if (!edits || edits.length === 0) {
-    return document.getText();
-  }
-
-  return applyTextEdits(document, edits);
-}
-
-function applyTextEdits(document, edits) {
-  const text = document.getText();
-  const sorted = [...edits].sort((a, b) => {
-    const startDelta = document.offsetAt(b.range.start) - document.offsetAt(a.range.start);
-    if (startDelta !== 0) {
-      return startDelta;
+  try {
+    const root = (await execFile('git', ['-C', cwd, 'rev-parse', '--show-toplevel'])).trim();
+    const relativePath = path.relative(root, uri.fsPath).replace(/\\/g, '/');
+    if (!relativePath || relativePath.startsWith('..')) {
+      return undefined;
     }
-    return document.offsetAt(b.range.end) - document.offsetAt(a.range.end);
-  });
 
-  let result = text;
-  for (const edit of sorted) {
-    const start = document.offsetAt(edit.range.start);
-    const end = document.offsetAt(edit.range.end);
-    result = result.slice(0, start) + edit.newText + result.slice(end);
+    return { root, relativePath };
+  } catch {
+    return undefined;
   }
-
-  return result;
 }
 
-function buildPreviewDiffHtml(title, currentText, formattedText) {
-  const rows = buildPreviewRows(currentText, formattedText);
+async function readGitHeadText(root, relativePath) {
+  try {
+    return await execFile('git', ['-C', root, 'show', `HEAD:${relativePath}`]);
+  } catch {
+    return '';
+  }
+}
+
+async function readWorkingTreeText(uri) {
+  const openDocument = vscode.workspace.textDocuments.find((document) => document.uri.toString() === uri.toString());
+  if (openDocument) {
+    return openDocument.getText();
+  }
+
+  try {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    return Buffer.from(bytes).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function setVirtualDocument(uri, text) {
+  virtualDocuments.set(uri.toString(), text);
+  changeEmitter.fire(uri);
+}
+
+function buildPreviewDiffHtml(title, baseText, workingText) {
+  const rows = buildPreviewRows(baseText, workingText);
   const body = rows.map((row) => {
-    const left = row.left ? renderPreviewCell(row.left, row.leftKind) : '<div class="empty">No matching preview block</div>';
-    const right = row.right ? renderPreviewCell(row.right, row.rightKind) : '<div class="empty">No matching preview block</div>';
+    const left = row.left ? renderPreviewCell(row.left, row.leftKind) : '<div class="empty">No matching Git base preview block</div>';
+    const right = row.right ? renderPreviewCell(row.right, row.rightKind) : '<div class="empty">No matching working tree preview block</div>';
     return `<section class="row"><article class="cell">${left}</article><article class="cell">${right}</article></section>`;
   }).join('');
 
@@ -295,15 +312,15 @@ img {
 </style>
 </head>
 <body>
-<header><div>Current Preview</div><div>Formatted Preview</div></header>
+<header><div>Git Base Preview</div><div>Working Tree Preview</div></header>
 <main>${body}</main>
 </body>
 </html>`;
 }
 
-function buildPreviewRows(currentText, formattedText) {
-  const leftBlocks = splitMarkdownBlocks(currentText);
-  const rightBlocks = splitMarkdownBlocks(formattedText);
+function buildPreviewRows(baseText, workingText) {
+  const leftBlocks = splitMarkdownBlocks(baseText);
+  const rightBlocks = splitMarkdownBlocks(workingText);
   const table = buildLcsTable(leftBlocks, rightBlocks);
   const rows = [];
   let leftIndex = 0;
@@ -372,38 +389,11 @@ function renderPreviewCell(markdown, kind) {
   return `<div class="block ${kind}">${markdownRenderer.render(markdown)}</div>`;
 }
 
-function getFormattingOptions() {
-  const editor = vscode.window.activeTextEditor;
-  if (editor) {
-    return {
-      tabSize: editor.options.tabSize || 2,
-      insertSpaces: editor.options.insertSpaces !== false
-    };
-  }
-
-  return {
-    tabSize: 2,
-    insertSpaces: true
-  };
-}
-
-async function isInsideGitRepository(uri) {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-  const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : dirname(uri.fsPath);
-
-  try {
-    const result = await execFile('git', ['-C', cwd, 'rev-parse', '--is-inside-work-tree']);
-    return result.trim() === 'true';
-  } catch {
-    return false;
-  }
-}
-
 function execFile(command, args) {
   const childProcess = require('child_process');
 
   return new Promise((resolve, reject) => {
-    childProcess.execFile(command, args, { windowsHide: true }, (error, stdout, stderr) => {
+    childProcess.execFile(command, args, { windowsHide: true, maxBuffer: 1024 * 1024 * 20 }, (error, stdout, stderr) => {
       if (error) {
         reject(error);
         return;
@@ -446,10 +436,10 @@ function isMarkdownUri(uri) {
   return /\.md(?:own)?$/i.test(uri.fsPath || uri.path);
 }
 
-function createPreviewUri(sourceUri) {
+function createVirtualUri(sourceUri, variant) {
   const encodedName = encodeURIComponent(basename(sourceUri.fsPath));
   const encodedSource = encodeURIComponent(sourceUri.toString());
-  return vscode.Uri.parse(`${SCHEME}:/formatted/${encodedName}?source=${encodedSource}`);
+  return vscode.Uri.parse(`${SCHEME}:/${variant}/${encodedName}?source=${encodedSource}`);
 }
 
 function basename(filePath) {
@@ -474,6 +464,5 @@ function escapeHtml(value) {
 module.exports = {
   activate,
   deactivate,
-  applyTextEdits,
   buildPreviewRows
 };

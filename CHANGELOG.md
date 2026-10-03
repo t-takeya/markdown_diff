@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Changed source and preview diff commands to compare Git HEAD content against the current working tree instead of comparing local formatted output.
+- Updated Source Control commands to show Git file changes for selected Markdown resources.
+- Updated command titles and documentation for Git source and rendered preview diff workflows.
+
 ## 0.2.2
 
 - Fixed Markdown Format Diff: Show Formatted Preview Diff From Source Control so it is registered during extension activation.
