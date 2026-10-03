@@ -1,5 +1,7 @@
 # Markdown Format Diff
 
+Japanese README: [README.ja.md](./README.ja.md)
+
 Markdown Format Diff is a VS Code extension that previews how a Markdown file will change after formatting. It opens a normal VS Code diff editor with the current file on the left and a virtual formatted document on the right, so you can inspect the result before saving or applying any edits.
 
 ## Features

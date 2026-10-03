@@ -2,7 +2,7 @@
   "name": "markdown-format-diff",
   "displayName": "Markdown Format Diff",
   "description": "Preview Markdown formatting changes in a VS Code diff editor before modifying files.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "machshev1969",
   "license": "MIT",
   "engines": {
@@ -96,4 +96,3 @@
   },
   "homepage": "https://github.com/machs/markdown-format-diff#readme"
 }
-
