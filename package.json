@@ -1,0 +1,99 @@
+{
+  "name": "markdown-format-diff",
+  "displayName": "Markdown Format Diff",
+  "description": "Preview Markdown formatting changes in a VS Code diff editor before modifying files.",
+  "version": "0.1.0",
+  "publisher": "machshev1969",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "diff",
+    "formatter",
+    "git",
+    "preview"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:markdownFormatDiff.showFormattedDiff",
+    "onCommand:markdownFormatDiff.showFormattedDiffFromSourceControl"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "markdownFormatDiff.showFormattedDiff",
+        "title": "Markdown Format Diff: Show Formatted Diff",
+        "category": "Markdown Format Diff"
+      },
+      {
+        "command": "markdownFormatDiff.showFormattedDiffFromSourceControl",
+        "title": "Markdown Format Diff: Show Formatted Diff From Source Control",
+        "category": "Markdown Format Diff"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "markdownFormatDiff.showFormattedDiff",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "markdownFormatDiff.showFormattedDiff",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "markdownFormatDiff.showFormattedDiffFromSourceControl"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "markdownFormatDiff.showFormattedDiffFromSourceControl",
+          "when": "scmProvider == git && resourceExtname == .md || scmProvider == git && resourceExtname == .markdown || scmProvider == git && resourceExtname == .mdown",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Markdown Format Diff",
+      "properties": {
+        "markdownFormatDiff.openBeside": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the formatted diff beside the current editor."
+        },
+        "markdownFormatDiff.requireGitRepository": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require the Markdown file to be inside a Git repository before showing a formatted diff."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "node --check extension.js",
+    "vscode:prepublish": "npm run lint",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/machs/markdown-format-diff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/machs/markdown-format-diff/issues"
+  },
+  "homepage": "https://github.com/machs/markdown-format-diff#readme"
+}
+
