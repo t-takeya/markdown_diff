@@ -1,6 +1,6 @@
 # Markdown Format Diff
 
-Japanese README: [README.ja.md](./README.ja.md)
+Japanese README: [README.ja.md](https://github.com/t-takeya/markdown_diff/blob/main/README.ja.md)
 
 Markdown Format Diff is a VS Code extension that previews Markdown changes recorded by Git. It can show a source diff between the Git `HEAD` version and the current working tree, or a rendered preview diff that compares both Markdown versions side by side.
 
