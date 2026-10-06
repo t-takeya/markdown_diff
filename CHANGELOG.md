@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Automatically replace Git Markdown diff tabs with rendered previews using the original comparison revisions and editor group.
+- Add the renderSourceControlDiff setting to opt out of automatic previews.
+- Preserve complete Markdown structures and reference links, and compare rendered blocks without hiding code whitespace changes.
+- Support .markdown files, local preview images, and the openBeside setting for explicit preview commands.
+
 ## 0.3.1
 
 - Updated the Japanese README link in README.md.

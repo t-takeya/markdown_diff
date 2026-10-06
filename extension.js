@@ -12,6 +12,7 @@ const markdownRenderer = new MarkdownIt({
   typographer: false
 });
 let changeEmitter;
+const handledDiffTabs = new WeakSet();
 
 function activate(context) {
   changeEmitter = new vscode.EventEmitter();
@@ -26,8 +27,54 @@ function activate(context) {
     vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiff', showGitSourceDiff),
     vscode.commands.registerCommand('markdownFormatDiff.showFormattedDiffFromSourceControl', showGitSourceDiffFromSourceControl),
     vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiff', showGitPreviewDiff),
-    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiffFromSourceControl', showGitPreviewDiffFromSourceControl)
+    vscode.commands.registerCommand('markdownFormatDiff.showFormattedPreviewDiffFromSourceControl', showGitPreviewDiffFromSourceControl),
+    vscode.window.tabGroups.onDidChangeTabs((event) => {
+      for (const tab of [...event.opened, ...event.changed]) {
+        void showRenderedSourceControlDiff(tab);
+      }
+    })
   );
+
+  for (const group of vscode.window.tabGroups.all) {
+    if (group.activeTab) {
+      void showRenderedSourceControlDiff(group.activeTab);
+    }
+  }
+}
+
+async function showRenderedSourceControlDiff(tab) {
+  const input = tab.input;
+  if (!(input instanceof vscode.TabInputTextDiff)
+      || input.original.scheme !== 'git'
+      || !['file', 'git'].includes(input.modified.scheme)
+      || !isMarkdownUri(input.modified)
+      || !tab.isActive || tab.isDirty || handledDiffTabs.has(tab)
+      || !vscode.workspace.getConfiguration('markdownFormatDiff', input.modified)
+        .get('renderSourceControlDiff', true)) {
+    return;
+  }
+
+  handledDiffTabs.add(tab);
+  try {
+    // Use the exact revisions chosen by Git (HEAD/index/working tree, including renames).
+    const [original, modified] = await Promise.all([
+      vscode.workspace.openTextDocument(input.original),
+      vscode.workspace.openTextDocument(input.modified)
+    ]);
+    const group = vscode.window.tabGroups.all.find((candidate) => candidate.tabs.includes(tab));
+    if (!group || !tab.isActive || tab.isDirty || tab.input !== input
+        || !vscode.workspace.getConfiguration('markdownFormatDiff', input.modified)
+          .get('renderSourceControlDiff', true)) {
+      handledDiffTabs.delete(tab);
+      return;
+    }
+    const title = `${basename(input.modified.fsPath)} Git Preview Diff`;
+    createPreviewPanel(title, original.getText(), modified.getText(), group.viewColumn,
+      input.original, input.modified, 'Before', 'After');
+    await vscode.window.tabGroups.close(tab, true);
+  } catch (error) {
+    vscode.window.showWarningMessage(`Could not render the Markdown Git diff: ${error.message}`);
+  }
 }
 
 function deactivate() {
@@ -112,17 +159,28 @@ async function showGitPreviewDiffForUri(uri) {
   }
 
   const title = `${basename(uri.fsPath)} Git Preview Diff`;
+  const config = vscode.workspace.getConfiguration('markdownFormatDiff', uri);
+  createPreviewPanel(title, change.baseText, change.workingText,
+    config.get('openBeside', true) ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, uri, uri);
+}
+
+function createPreviewPanel(title, baseText, workingText, viewColumn, baseUri, workingUri,
+  leftLabel = 'Git Base Preview', rightLabel = 'Working Tree Preview') {
   const panel = vscode.window.createWebviewPanel(
     'markdownFormatDiff.previewDiff',
     title,
-    vscode.ViewColumn.Beside,
+    viewColumn,
     {
       enableScripts: false,
-      retainContextWhenHidden: true
+      retainContextWhenHidden: true,
+      localResourceRoots: [vscode.Uri.file(dirname(baseUri.fsPath)), vscode.Uri.file(dirname(workingUri.fsPath))]
     }
   );
 
-  panel.webview.html = buildPreviewDiffHtml(title, change.baseText, change.workingText);
+  panel.webview.html = buildPreviewDiffHtml(title, baseText, workingText, {
+    webview: panel.webview, baseUri, workingUri, leftLabel, rightLabel
+  });
+  return panel;
 }
 
 async function getGitMarkdownChange(uri) {
@@ -191,11 +249,11 @@ function setVirtualDocument(uri, text) {
   changeEmitter.fire(uri);
 }
 
-function buildPreviewDiffHtml(title, baseText, workingText) {
+function buildPreviewDiffHtml(title, baseText, workingText, options = {}) {
   const rows = buildPreviewRows(baseText, workingText);
   const body = rows.map((row) => {
-    const left = row.left ? renderPreviewCell(row.left, row.leftKind) : '<div class="empty">No matching Git base preview block</div>';
-    const right = row.right ? renderPreviewCell(row.right, row.rightKind) : '<div class="empty">No matching working tree preview block</div>';
+    const left = row.left ? renderPreviewCell(row.left, row.leftKind, options.webview, options.baseUri) : '<div class="empty">No matching preview block</div>';
+    const right = row.right ? renderPreviewCell(row.right, row.rightKind, options.webview, options.workingUri) : '<div class="empty">No matching preview block</div>';
     return `<section class="row"><article class="cell">${left}</article><article class="cell">${right}</article></section>`;
   }).join('');
 
@@ -204,6 +262,7 @@ function buildPreviewDiffHtml(title, baseText, workingText) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${options.webview ? options.webview.cspSource : ''} https: data:; style-src 'unsafe-inline';">
 <title>${escapeHtml(title)}</title>
 <style>
 :root {
@@ -312,7 +371,7 @@ img {
 </style>
 </head>
 <body>
-<header><div>Git Base Preview</div><div>Working Tree Preview</div></header>
+<header><div>${escapeHtml(options.leftLabel || 'Git Base Preview')}</div><div>${escapeHtml(options.rightLabel || 'Working Tree Preview')}</div></header>
 <main>${body}</main>
 </body>
 </html>`;
@@ -358,11 +417,19 @@ function buildPreviewRows(baseText, workingText) {
 }
 
 function splitMarkdownBlocks(text) {
-  return text
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
+  const env = {};
+  const tokens = markdownRenderer.parse(text, env);
+  const blocks = [];
+  let start = 0;
+  // Split only at complete top-level elements, preserving lists, tables and fenced code.
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.level === 0 && token.nesting !== 1) {
+      blocks.push(markdownRenderer.renderer.render(tokens.slice(start, index + 1), markdownRenderer.options, env));
+      start = index + 1;
+    }
+  }
+  return blocks;
 }
 
 function buildLcsTable(leftBlocks, rightBlocks) {
@@ -382,11 +449,22 @@ function buildLcsTable(leftBlocks, rightBlocks) {
 }
 
 function normalizeBlock(block) {
-  return block.replace(/\s+/g, ' ').trim();
+  // Whitespace inside code and hard line breaks affect the rendered result.
+  return block;
 }
 
-function renderPreviewCell(markdown, kind) {
-  return `<div class="block ${kind}">${markdownRenderer.render(markdown)}</div>`;
+function renderPreviewCell(html, kind, webview, sourceUri) {
+  if (webview && sourceUri) {
+    html = html.replace(/(<img\b[^>]*\bsrc=")([^"]*)(")/g, (match, prefix, src, suffix) => {
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(src)) {
+        return match;
+      }
+      const decoded = src.replace(/&amp;/g, '&');
+      const resource = vscode.Uri.joinPath(vscode.Uri.file(dirname(sourceUri.fsPath)), decoded);
+      return `${prefix}${escapeHtml(webview.asWebviewUri(resource).toString())}${suffix}`;
+    });
+  }
+  return `<div class="block ${kind}">${html}</div>`;
 }
 
 function execFile(command, args) {
@@ -433,7 +511,7 @@ function getActiveMarkdownUri() {
 }
 
 function isMarkdownUri(uri) {
-  return /\.md(?:own)?$/i.test(uri.fsPath || uri.path);
+  return /\.(?:md|markdown|mdown)$/i.test(uri.fsPath || uri.path);
 }
 
 function createVirtualUri(sourceUri, variant) {

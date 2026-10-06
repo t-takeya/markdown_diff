@@ -2,7 +2,7 @@
   "name": "markdown-format-diff",
   "displayName": "Markdown Format Diff",
   "description": "Preview Git changes in Markdown source and rendered preview diff views.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "machshev1969",
   "license": "MIT",
   "engines": {
@@ -20,6 +20,9 @@
     "preview"
   ],
   "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
@@ -79,11 +82,6 @@
           "group": "inline"
         },
         {
-          "command": "markdownFormatDiff.showFormattedPreviewDiff",
-          "when": "scmProvider == git && resourceExtname == .md || scmProvider == git && resourceExtname == .markdown || scmProvider == git && resourceExtname == .mdown",
-          "group": "inline"
-        },
-        {
           "command": "markdownFormatDiff.showFormattedPreviewDiffFromSourceControl",
           "when": "scmProvider == git && resourceExtname == .md || scmProvider == git && resourceExtname == .markdown || scmProvider == git && resourceExtname == .mdown",
           "group": "inline"
@@ -93,10 +91,15 @@
     "configuration": {
       "title": "Markdown Format Diff",
       "properties": {
+        "markdownFormatDiff.renderSourceControlDiff": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically show rendered Markdown when opening a Git diff, including from Source Control. Disable to keep the standard text diff."
+        },
         "markdownFormatDiff.openBeside": {
           "type": "boolean",
           "default": true,
-          "description": "Open the Git source diff beside the current editor."
+          "description": "Open source and preview diff commands beside the current editor. Automatic Source Control previews open in the original diff editor group."
         },
         "markdownFormatDiff.requireGitRepository": {
           "type": "boolean",
@@ -108,6 +111,7 @@
   },
   "scripts": {
     "lint": "node --check extension.js",
+    "test": "node --test test/*.test.js",
     "package": "npm run lint && vsce package"
   },
   "devDependencies": {
