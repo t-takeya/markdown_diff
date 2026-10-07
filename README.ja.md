@@ -12,7 +12,8 @@ English README: [README.md](./README.md)
 - Markdown ファイルについて、Git `HEAD` の内容と現在の作業ツリーを比較できます。
 - ファイルを変更せずに、Markdown の Git 差分をプレビューできます。
 - Git 差分をソース差分またはレンダリング済み preview ブロックとして比較できます。
-- コマンドパレット、エディターのコンテキストメニュー、Git Source Control のリソースメニューから実行できます。
+- ローカルの `.md`、`.markdown`、`.mdown` ファイルで、コマンドパレットまたはエディターのコンテキストメニューから実行できます。
+- Source Control では Markdown の差分を自動でプレビューし、それ以外は通常の Git 差分を表示します。VS Code はこのメニューに選択ファイルの拡張子を渡さないため、Source Control のメニューボタンは表示しません。
 - 追加ファイルや削除ファイルは、存在しない側を空として比較します。
 - 対象ファイルが Git リポジトリ内にあることを必須にできます。
 
@@ -21,9 +22,7 @@ English README: [README.md](./README.md)
 | コマンド | 説明 |
 | --- | --- |
 | `Markdown Format Diff: Show Git Source Diff` | アクティブな Markdown ファイルについて、Git `HEAD` と作業ツリーのソース差分を表示します。 |
-| `Markdown Format Diff: Show Git Source Diff From Source Control` | Source Control で選択した Markdown ファイルのソース差分を表示します。 |
 | `Markdown Format Diff: Show Git Preview Diff` | Markdown の Git 差分をレンダリング済み preview として左右に並べ、変更されたブロックを強調表示します。 |
-| `Markdown Format Diff: Show Git Preview Diff From Source Control` | Source Control で選択した Markdown ファイルのレンダリング済み preview 差分を表示します。 |
 
 ## 設定
 

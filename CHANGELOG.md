@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Restrict diff commands to local Markdown files and ignore unsupported explicit selections without falling back to the active editor.
+- Remove Source Control menu buttons whose file-extension conditions used the active editor instead of the selected resource; keep automatic Markdown previews and editor commands.
+- Keep standard Git diffs when either comparison file is not Markdown.
+
 ## 0.4.0
 
 - Automatically replace Git Markdown diff tabs with rendered previews using the original comparison revisions and editor group.

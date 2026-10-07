@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
-function loadExtension({ enabled = true, failRead = false, extension = 'md', modifiedScheme = 'file', dirty = false } = {}) {
+function loadExtension({ enabled = true, failRead = false, extension = 'md', originalExtension = extension, modifiedScheme = 'file', dirty = false } = {}) {
   class Uri {
     constructor(scheme, fsPath) { this.scheme = scheme; this.fsPath = fsPath; }
     toString() { return `${this.scheme}:${this.fsPath}`; }
@@ -16,7 +16,7 @@ function loadExtension({ enabled = true, failRead = false, extension = 'md', mod
   class TabInputTextDiff {
     constructor(original, modified) { this.original = original; this.modified = modified; }
   }
-  const original = new Uri('git', `C:/repo/example.${extension}`);
+  const original = new Uri('git', `C:/repo/example.${originalExtension}`);
   const modified = new Uri(modifiedScheme, `C:/repo/example.${extension}`);
   const tab = { input: new TabInputTextDiff(original, modified), isActive: true, isDirty: dirty };
   const group = { activeTab: tab, tabs: [tab], viewColumn: 2 };
@@ -24,12 +24,17 @@ function loadExtension({ enabled = true, failRead = false, extension = 'md', mod
   const reads = [];
   const closed = [];
   const warnings = [];
+  const commands = new Map();
+  const gitCalls = [];
   let onTabs;
   const vscode = {
     Uri, TabInputTextDiff,
     ViewColumn: { Beside: -2, Active: -1 },
     EventEmitter: class { constructor() { this.event = () => {}; } fire() {} dispose() {} },
     workspace: {
+      textDocuments: [],
+      fs: { readFile: async () => Buffer.from('# Working tree') },
+      getWorkspaceFolder: () => undefined,
       registerTextDocumentContentProvider: () => ({ dispose() {} }),
       getConfiguration: () => ({ get: (key, fallback) => key === 'renderSourceControlDiff' ? enabled : fallback }),
       openTextDocument: async (uri) => {
@@ -38,7 +43,7 @@ function loadExtension({ enabled = true, failRead = false, extension = 'md', mod
         return { getText: () => uri === original ? '# Before\n\n[link][ref]\n\n[ref]: https://example.com' : '# After\n\n![image](image.png)' };
       }
     },
-    commands: { registerCommand: () => ({ dispose() {} }) },
+    commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; } },
     window: {
       tabGroups: {
         all: [group],
@@ -57,11 +62,20 @@ function loadExtension({ enabled = true, failRead = false, extension = 'md', mod
     }
   };
   const sandbox = {
-    require: (name) => name === 'vscode' ? vscode : require(name),
+    require: (name) => {
+      if (name === 'vscode') { return vscode; }
+      if (name === 'child_process') {
+        return { execFile(command, args, options, callback) {
+          gitCalls.push(args);
+          callback(null, args.includes('rev-parse') ? 'C:/repo' : '# HEAD');
+        } };
+      }
+      return require(name);
+    },
     module: { exports: {} }, Buffer
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'extension.js'), 'utf8'), sandbox);
-  return { api: sandbox.module.exports, tab, original, modified, panels, reads, closed, warnings,
+  return { api: sandbox.module.exports, vscode, commands, gitCalls, tab, original, modified, panels, reads, closed, warnings,
     activate() { sandbox.module.exports.activate({ subscriptions: [] }); },
     notify() { onTabs({ opened: [tab], changed: [tab], closed: [] }); }
   };
@@ -108,13 +122,58 @@ test('opening a Markdown diff after activation triggers a rendered preview', asy
 });
 
 test('setting disabled, non-Markdown, and dirty tabs retain the standard diff', async () => {
-  for (const options of [{ enabled: false }, { extension: 'txt' }, { dirty: true }]) {
+  for (const options of [{ enabled: false }, { extension: 'txt' }, { extension: 'png' },
+    { originalExtension: 'txt' }, { dirty: true }]) {
     const state = loadExtension(options);
     state.activate();
     await settle();
     assert.equal(state.reads.length, 0);
     assert.equal(state.panels.length, 0);
     assert.equal(state.closed.length, 0);
+    assert.equal(state.warnings.length, 0);
+  }
+});
+
+test('explicit unsupported selections never fall back to the active Markdown editor', async () => {
+  const state = loadExtension({ enabled: false });
+  state.vscode.window.activeTextEditor = { document: { languageId: 'markdown', uri: state.modified } };
+  state.activate();
+  const txt = state.vscode.Uri.file('C:/repo/notes.txt');
+  const png = state.vscode.Uri.file('C:/repo/image.png');
+  const unsupported = [txt, { resourceUri: png }, { uri: txt }, [txt],
+    [state.modified, txt], {}, null, new state.vscode.Uri('untitled', 'example.md')];
+  for (const handler of state.commands.values()) {
+    for (const selection of unsupported) {
+      await handler(selection);
+    }
+  }
+  assert.equal(state.gitCalls.length, 0);
+  assert.equal(state.reads.length, 0);
+  assert.equal(state.panels.length, 0);
+  assert.equal(state.closed.length, 0);
+  assert.equal(state.warnings.length, 0);
+});
+
+test('a non-Markdown filename in Markdown language mode does not start a Git diff', async () => {
+  const state = loadExtension({ enabled: false, extension: 'txt' });
+  state.vscode.window.activeTextEditor = { document: { languageId: 'markdown', uri: state.modified } };
+  state.activate();
+  for (const handler of state.commands.values()) { await handler(); }
+  assert.equal(state.gitCalls.length, 0);
+  assert.equal(state.panels.length, 0);
+});
+
+test('explicit Markdown preview commands still accept URIs and resource wrappers', async () => {
+  for (const extension of ['md', 'markdown', 'mdown', 'MD']) {
+    const state = loadExtension({ enabled: false, extension });
+    state.activate();
+    for (const selection of [state.modified, { resourceUri: state.modified },
+      { uri: state.modified }, [{ resourceUri: state.modified }]]) {
+      await state.commands.get('markdownFormatDiff.showFormattedPreviewDiff')(selection);
+    }
+    assert.equal(state.panels.length, 4);
+    assert.equal(state.gitCalls.length, 8);
+    assert.equal(state.warnings.length, 0);
   }
 });
 

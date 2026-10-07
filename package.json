@@ -2,7 +2,7 @@
   "name": "markdown-format-diff",
   "displayName": "Markdown Format Diff",
   "description": "Preview Git changes in Markdown source and rendered preview diff views.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "machshev1969",
   "license": "MIT",
   "engines": {
@@ -28,63 +28,57 @@
       {
         "command": "markdownFormatDiff.showFormattedDiff",
         "title": "Show Git Source Diff",
-        "category": "Markdown Format Diff"
+        "category": "Markdown Format Diff",
+        "enablement": "resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
       },
       {
         "command": "markdownFormatDiff.showFormattedDiffFromSourceControl",
         "title": "Show Git Source Diff From Source Control",
-        "category": "Markdown Format Diff"
+        "category": "Markdown Format Diff",
+        "enablement": "resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
       },
       {
         "command": "markdownFormatDiff.showFormattedPreviewDiff",
         "title": "Show Git Preview Diff",
-        "category": "Markdown Format Diff"
+        "category": "Markdown Format Diff",
+        "enablement": "resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
       },
       {
         "command": "markdownFormatDiff.showFormattedPreviewDiffFromSourceControl",
         "title": "Show Git Preview Diff From Source Control",
-        "category": "Markdown Format Diff"
+        "category": "Markdown Format Diff",
+        "enablement": "resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "markdownFormatDiff.showFormattedDiff",
-          "when": "editorLangId == markdown",
+          "when": "editorLangId == markdown && resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i",
           "group": "navigation"
         },
         {
           "command": "markdownFormatDiff.showFormattedPreviewDiff",
-          "when": "editorLangId == markdown",
+          "when": "editorLangId == markdown && resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "markdownFormatDiff.showFormattedDiff",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markdown && resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
         },
         {
-          "command": "markdownFormatDiff.showFormattedDiffFromSourceControl"
+          "command": "markdownFormatDiff.showFormattedDiffFromSourceControl",
+          "when": "false"
         },
         {
           "command": "markdownFormatDiff.showFormattedPreviewDiff",
-          "when": "editorLangId == markdown"
-        },
-        {
-          "command": "markdownFormatDiff.showFormattedPreviewDiffFromSourceControl"
-        }
-      ],
-      "scm/resourceState/context": [
-        {
-          "command": "markdownFormatDiff.showFormattedDiffFromSourceControl",
-          "when": "scmProvider == git && resourceExtname == .md || scmProvider == git && resourceExtname == .markdown || scmProvider == git && resourceExtname == .mdown",
-          "group": "inline"
+          "when": "editorLangId == markdown && resourceScheme == file && resourceExtname =~ /\\.(md|markdown|mdown)$/i"
         },
         {
           "command": "markdownFormatDiff.showFormattedPreviewDiffFromSourceControl",
-          "when": "scmProvider == git && resourceExtname == .md || scmProvider == git && resourceExtname == .markdown || scmProvider == git && resourceExtname == .mdown",
-          "group": "inline"
+          "when": "false"
         }
       ]
     },

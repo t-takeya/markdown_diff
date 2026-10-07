@@ -47,6 +47,7 @@ async function showRenderedSourceControlDiff(tab) {
   if (!(input instanceof vscode.TabInputTextDiff)
       || input.original.scheme !== 'git'
       || !['file', 'git'].includes(input.modified.scheme)
+      || !isMarkdownUri(input.original)
       || !isMarkdownUri(input.modified)
       || !tab.isActive || tab.isDirty || handledDiffTabs.has(tab)
       || !vscode.workspace.getConfiguration('markdownFormatDiff', input.modified)
@@ -82,8 +83,9 @@ function deactivate() {
 }
 
 async function showGitSourceDiff(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  const uri = getCommandMarkdownUri(resource);
   if (!uri) {
+    if (resource !== undefined) { return; }
     vscode.window.showWarningMessage('Open a Markdown file to preview Git changes.');
     return;
   }
@@ -92,8 +94,9 @@ async function showGitSourceDiff(resource) {
 }
 
 async function showGitSourceDiffFromSourceControl(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  const uri = getCommandMarkdownUri(resource);
   if (!uri) {
+    if (resource !== undefined) { return; }
     vscode.window.showWarningMessage('Select a Markdown file in Source Control or open one in the editor.');
     return;
   }
@@ -102,8 +105,9 @@ async function showGitSourceDiffFromSourceControl(resource) {
 }
 
 async function showGitPreviewDiff(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  const uri = getCommandMarkdownUri(resource);
   if (!uri) {
+    if (resource !== undefined) { return; }
     vscode.window.showWarningMessage('Open or select a Markdown file to preview rendered Git changes.');
     return;
   }
@@ -112,8 +116,9 @@ async function showGitPreviewDiff(resource) {
 }
 
 async function showGitPreviewDiffFromSourceControl(resource) {
-  const uri = getResourceUri(resource) || getActiveMarkdownUri();
+  const uri = getCommandMarkdownUri(resource);
   if (!uri) {
+    if (resource !== undefined) { return; }
     vscode.window.showWarningMessage('Select a Markdown file in Source Control or open one in the editor.');
     return;
   }
@@ -184,8 +189,7 @@ function createPreviewPanel(title, baseText, workingText, viewColumn, baseUri, w
 }
 
 async function getGitMarkdownChange(uri) {
-  if (!isMarkdownUri(uri)) {
-    vscode.window.showWarningMessage('Markdown Format Diff only supports Markdown files.');
+  if (uri.scheme !== 'file' || !isMarkdownUri(uri)) {
     return undefined;
   }
 
@@ -482,6 +486,9 @@ function execFile(command, args) {
 }
 
 function getResourceUri(resource) {
+  if (Array.isArray(resource)) {
+    return resource.length === 1 ? getResourceUri(resource[0]) : undefined;
+  }
   if (!resource) {
     return undefined;
   }
@@ -508,6 +515,12 @@ function getActiveMarkdownUri() {
   }
 
   return editor.document.uri;
+}
+
+function getCommandMarkdownUri(resource) {
+  // An explicit selection must never fall back to a different, active file.
+  const uri = resource === undefined ? getActiveMarkdownUri() : getResourceUri(resource);
+  return uri && uri.scheme === 'file' && isMarkdownUri(uri) ? uri : undefined;
 }
 
 function isMarkdownUri(uri) {
